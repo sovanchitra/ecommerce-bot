@@ -3,35 +3,45 @@
 namespace App\Handlers;
 
 use App\Models\Product;
-use Illuminate\Support\Facades\Log;
 
 class TextAnalyzer
 {
+    protected $intents = [
+        'buy' => ['buy', 'purchase', 'want', 'get', 'order'],
+        'sell' => ['sell', 'have', 'stock', 'available', 'carry']
+    ];
+
     public function analyze($text)
     {
-        Log::info('Text to analyze', ['text' => $text]);
         $text = strtolower(trim($text));
         $products = Product::all()->pluck('name')->map('strtolower')->unique()->toArray();
 
-        Log::info('Products', ['products' => $products]);
-
         $intent = $this->detectIntent($text);
         $productName = $this->detectProduct($text, $products);
+        $negated = str_contains($text, 'not') || str_contains($text, 'dont') || str_contains($text, "don't");
+
+        // Flip intent if negated
+        if ($negated && $intent === 'buy') {
+            $intent = null; // Or a "not_buy" intent if you want to handle it
+        }
 
         return [
             'intent' => $intent,
             'product' => $productName ? ucfirst($productName) : null,
-            'raw_text' => $text
+            'raw_text' => $text,
+            'negated' => $negated
         ];
     }
 
     protected function detectIntent($text)
     {
-        if (str_contains($text, 'buy') || str_contains($text, 'want')) {
-            return 'buy';
-        }
-        if (str_contains($text, 'sell') || str_contains($text, 'have') || str_contains($text, 'stock')) {
-            return 'sell';
+        // Check for keywords
+        foreach ($this->intents as $intent => $keywords) {
+            foreach ($keywords as $keyword) {
+                if (str_contains($text, $keyword)) {
+                    return $intent;
+                }
+            }
         }
         return null;
     }
@@ -39,8 +49,16 @@ class TextAnalyzer
     protected function detectProduct($text, $products)
     {
         foreach ($products as $product) {
+            // Exact match
             if (str_contains($text, $product)) {
                 return $product;
+            }
+            // Fuzzy match (e.g., "drss" -> "dress")
+            $words = explode(' ', $text);
+            foreach ($words as $word) {
+                if (strlen($word) > 2 && similar_text($word, $product, $percent) && $percent > 80) {
+                    return $product;
+                }
             }
         }
         return null;

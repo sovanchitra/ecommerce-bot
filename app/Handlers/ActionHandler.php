@@ -12,6 +12,7 @@ class ActionHandler
     {
         $intent = $analysis['intent'];
         $productName = $analysis['product'];
+        $negated = $analysis['negated'];
 
         if (!$intent && !$productName) {
             $telegram->sendMessage([
@@ -25,6 +26,16 @@ class ActionHandler
             $this->handleBuy($telegram, $chatId, $productName);
         } elseif ($intent === 'sell' && $productName) {
             $this->handleSell($telegram, $chatId, $productName);
+        } elseif ($productName && !$intent) {
+            $telegram->sendMessage([
+                'chat_id' => $chatId,
+                'text' => "Did you mean to buy {$productName} or check if we sell it? Try 'I want to buy a {$productName}' or 'Do you sell {$productName}?'"
+            ]);
+        } elseif ($negated) {
+            $telegram->sendMessage([
+                'chat_id' => $chatId,
+                'text' => "Okay, I won’t show you anything you don’t want! Try /catalog to see what’s available."
+            ]);
         } else {
             $telegram->sendMessage([
                 'chat_id' => $chatId,
